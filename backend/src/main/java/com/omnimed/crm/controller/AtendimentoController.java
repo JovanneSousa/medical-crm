@@ -7,6 +7,7 @@ import com.omnimed.crm.model.*;
 import com.omnimed.crm.repository.MensagemRepository;
 import com.omnimed.crm.repository.SessaoAtendimentoRepository;
 import com.omnimed.crm.service.TelegramBotService;
+import com.omnimed.crm.service.WhatsAppService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,13 +23,16 @@ public class AtendimentoController {
     private final SessaoAtendimentoRepository sessaoRepository;
     private final MensagemRepository mensagemRepository;
     private final TelegramBotService telegramBotService;
+    private final WhatsAppService whatsAppService;
 
     public AtendimentoController(SessaoAtendimentoRepository sessaoRepository,
                                  MensagemRepository mensagemRepository,
-                                 TelegramBotService telegramBotService) {
+                                 TelegramBotService telegramBotService,
+                                 WhatsAppService whatsAppService) {
         this.sessaoRepository = sessaoRepository;
         this.mensagemRepository = mensagemRepository;
         this.telegramBotService = telegramBotService;
+        this.whatsAppService = whatsAppService;
     }
 
     @GetMapping("/sessoes")
@@ -94,6 +98,8 @@ public class AtendimentoController {
 
         if (sessao.getCanal() == CanalTipo.TELEGRAM) {
             telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
+        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
+            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
         }
 
         return ResponseEntity.ok().build();
@@ -114,6 +120,8 @@ public class AtendimentoController {
 
         if (sessao.getCanal() == CanalTipo.TELEGRAM) {
             telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), "👩‍💼 *Atendente:* " + dto.conteudo());
+        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
+            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), "👩‍💼 *Atendente:* " + dto.conteudo());
         }
 
         return ResponseEntity.ok(new MensagemDTO(
@@ -143,6 +151,8 @@ public class AtendimentoController {
 
         if (sessao.getCanal() == CanalTipo.TELEGRAM) {
             telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
+        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
+            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
         }
 
         return ResponseEntity.ok().build();
@@ -155,6 +165,7 @@ public class AtendimentoController {
                 .orElseThrow(() -> new IllegalArgumentException("Sessão não encontrada: " + id));
 
         sessao.setStatus(StatusSessao.FINALIZADO);
+        sessao.setEstadoConversa(EstadoConversa.FINALIZADO);
         sessao.setDataUltimaInteracao(LocalDateTime.now());
         sessaoRepository.save(sessao);
 
@@ -164,6 +175,8 @@ public class AtendimentoController {
 
         if (sessao.getCanal() == CanalTipo.TELEGRAM) {
             telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
+        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
+            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
         }
 
         return ResponseEntity.ok().build();

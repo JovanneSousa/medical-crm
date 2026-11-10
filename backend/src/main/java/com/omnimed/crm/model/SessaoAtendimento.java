@@ -16,7 +16,7 @@ public class SessaoAtendimento {
     private CanalTipo canal;
 
     @Column(name = "canal_usuario_id", nullable = false, length = 100)
-    private String canalUsuarioId; // Ex: Telegram ChatId ou UUID de WebChat
+    private String canalUsuarioId; // Ex: Telegram ChatId, WhatsApp Number ou UUID de WebChat
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "paciente_id")
@@ -30,12 +30,21 @@ public class SessaoAtendimento {
     @Column(name = "estado_conversa", nullable = false, length = 40)
     private EstadoConversa estadoConversa;
 
-    // Metadados temporários da sessão para orquestração guiada
+    // Metadados temporários da sessão para orquestração guiada e cadastro
     @Column(name = "temp_especialidade_id")
     private Long tempEspecialidadeId;
 
     @Column(name = "temp_medico_id")
     private Long tempMedicoId;
+
+    @Column(name = "temp_cpf", length = 20)
+    private String tempCpf;
+
+    @Column(name = "temp_nome", length = 150)
+    private String tempNome;
+
+    @Column(name = "temp_telefone", length = 30)
+    private String tempTelefone;
 
     @Column(name = "data_inicio", nullable = false)
     private LocalDateTime dataInicio;
@@ -121,6 +130,30 @@ public class SessaoAtendimento {
 
     public void setTempMedicoId(Long tempMedicoId) {
         this.tempMedicoId = tempMedicoId;
+    }
+
+    public String getTempCpf() {
+        return tempCpf;
+    }
+
+    public void setTempCpf(String tempCpf) {
+        this.tempCpf = tempCpf;
+    }
+
+    public String getTempNome() {
+        return tempNome;
+    }
+
+    public void setTempNome(String tempNome) {
+        this.tempNome = tempNome;
+    }
+
+    public String getTempTelefone() {
+        return tempTelefone;
+    }
+
+    public void setTempTelefone(String tempTelefone) {
+        this.tempTelefone = tempTelefone;
     }
 
     public LocalDateTime getDataInicio() {

@@ -22,13 +22,24 @@ spring:
       hibernate:
         format_sql: true
 
-# Configurações do Telegram Bot e Omnichannel
+# Configurações Omnichannel, Bots e Chat
 omnimed:
   telegram:
-    enabled: false # Ligue para 'true' ao fornecer o token do seu bot
+    enabled: true
     bot-token: "${TELEGRAM_BOT_TOKEN:}"
     bot-username: "${TELEGRAM_BOT_USERNAME:OmniMedBot}"
     polling-interval-ms: 2000
+  whatsapp:
+    enabled: true
+    gateway-base-url: "${WHATSAPP_GATEWAY_BASE_URL:http://localhost:8081}"
+    gateway-url: "${WHATSAPP_GATEWAY_URL:http://localhost:8081/message/sendText/omnimed}"
+    gateway-api-key: "${WHATSAPP_GATEWAY_API_KEY:omnimed_secret_token_123}"
+    instance-name: "${WHATSAPP_INSTANCE_NAME:omnimed}"
+    test-number: "${WHATSAPP_TEST_NUMBER:5511999998888}"
+    webhook-secret: "${WHATSAPP_WEBHOOK_SECRET:omnimed_secret_token_123}"
+  chat:
+    inactivity-timeout-minutes: 10
+    timeout-check-interval-ms: 60000
   cors:
     allowed-origins: "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
 

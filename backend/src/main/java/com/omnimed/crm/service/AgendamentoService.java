@@ -8,7 +8,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 @Service
@@ -77,11 +79,22 @@ public class AgendamentoService {
 
         agendamento.setStatus(StatusAgendamento.CANCELADO);
 
-        // Tentar reativar o slot caso exista
+        // Reativa o slot na agenda clínica
         LocalDate data = agendamento.getDataHora().toLocalDate();
-        List<HorarioAtendimento> horarios = horarioRepository.findByMedicoIdAndDataAndDisponivelTrueOrderByHoraInicioAsc(
-                agendamento.getMedico().getId(), data);
-        
+        LocalTime hora = agendamento.getDataHora().toLocalTime();
+
+        Optional<HorarioAtendimento> slotOpt = horarioRepository.findByMedicoIdAndDataAndHoraInicio(
+                agendamento.getMedico().getId(), data, hora
+        );
+
+        if (slotOpt.isPresent()) {
+            HorarioAtendimento slot = slotOpt.get();
+            slot.setDisponivel(true);
+            horarioRepository.save(slot);
+        } else {
+            horarioRepository.save(new HorarioAtendimento(agendamento.getMedico(), data, hora, hora.plusMinutes(30)));
+        }
+
         return agendamentoRepository.save(agendamento);
     }
 

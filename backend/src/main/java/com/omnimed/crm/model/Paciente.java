@@ -26,6 +26,9 @@ public class Paciente {
     @Column(name = "telegram_chat_id", unique = true, length = 50)
     private String telegramChatId;
 
+    @Column(name = "whatsapp_number", length = 50)
+    private String whatsappNumber;
+
     @Column(name = "data_cadastro", nullable = false)
     private LocalDateTime dataCadastro;
 
@@ -39,6 +42,16 @@ public class Paciente {
         this.telefone = telefone;
         this.email = email;
         this.telegramChatId = telegramChatId;
+        this.dataCadastro = LocalDateTime.now();
+    }
+
+    public Paciente(String nome, String cpf, String telefone, String email, String telegramChatId, String whatsappNumber) {
+        this.nome = nome;
+        this.cpf = cpf;
+        this.telefone = telefone;
+        this.email = email;
+        this.telegramChatId = telegramChatId;
+        this.whatsappNumber = whatsappNumber;
         this.dataCadastro = LocalDateTime.now();
     }
 
@@ -88,6 +101,14 @@ public class Paciente {
 
     public void setTelegramChatId(String telegramChatId) {
         this.telegramChatId = telegramChatId;
+    }
+
+    public String getWhatsappNumber() {
+        return whatsappNumber;
+    }
+
+    public void setWhatsappNumber(String whatsappNumber) {
+        this.whatsappNumber = whatsappNumber;
     }
 
     public LocalDateTime getDataCadastro() {

@@ -118,7 +118,7 @@ export const LiveChatView: React.FC = () => {
           </div>
           {/* Filtros */}
           <div className="flex gap-1 overflow-x-auto pb-1 text-xs">
-            {['TODOS', 'AGUARDANDO_HUMANO', 'EM_ATENDIMENTO_HUMANO', 'BOT'].map((status) => (
+            {['TODOS', 'AGUARDANDO_HUMANO', 'EM_ATENDIMENTO_HUMANO', 'BOT', 'FINALIZADO'].map((status) => (
               <button
                 key={status}
                 onClick={() => setFiltroStatus(status)}
@@ -132,6 +132,7 @@ export const LiveChatView: React.FC = () => {
                 {status === 'AGUARDANDO_HUMANO' && 'Fila de Espera'}
                 {status === 'EM_ATENDIMENTO_HUMANO' && 'Em Atendimento'}
                 {status === 'BOT' && 'Autoatendimento (Bot)'}
+                {status === 'FINALIZADO' && 'Finalizados'}
               </button>
             ))}
           </div>

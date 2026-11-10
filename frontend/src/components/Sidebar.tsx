@@ -4,6 +4,7 @@ import {
   MessageSquare, 
   CalendarDays, 
   Stethoscope, 
+  Users,
   Bot, 
   Activity,
   ShieldCheck
@@ -25,6 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab, fil
       badge: filaAguardandoCount > 0 ? filaAguardandoCount : undefined 
     },
     { id: 'agendamentos', label: 'Agendamentos', icon: CalendarDays },
+    { id: 'pacientes', label: 'Pacientes', icon: Users },
     { id: 'medicos', label: 'Corpo Clínico', icon: Stethoscope },
     { id: 'simulador', label: 'Simulador / Bot Demo', icon: Bot },
   ];
@@ -57,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab, fil
               <button
                 key={item.id}
                 onClick={() => setCurrentTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                   isActive
                     ? 'bg-teal-600 text-white shadow-md shadow-teal-900/30 font-semibold'
                     : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'

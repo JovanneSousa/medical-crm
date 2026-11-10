@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Pattern;
+import java.util.Set;
 
 @Service
 public class ConversationalEngineService {
@@ -25,7 +25,7 @@ public class ConversationalEngineService {
     private final ExameService exameService;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    private static final Pattern CPF_PATTERN = Pattern.compile("(\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2})|(\\d{11})");
+    private static final Set<String> COMANDOS_ENCERRAR = Set.of("sair", "/sair", "encerrar", "/encerrar", "fim", "finalizar", "tchau");
 
     public ConversationalEngineService(SessaoAtendimentoRepository sessaoRepository,
                                        MensagemRepository mensagemRepository,
@@ -47,15 +47,26 @@ public class ConversationalEngineService {
 
     @Transactional
     public SessaoAtendimento obterOuCriarSessao(CanalTipo canal, String canalUsuarioId) {
-        return sessaoRepository.findByCanalAndCanalUsuarioId(canal, canalUsuarioId)
-                .orElseGet(() -> {
-                    SessaoAtendimento nova = new SessaoAtendimento(canal, canalUsuarioId);
-                    // Se houver paciente pré-vinculado a esse canalUsuarioId (ex: telegramChatId)
-                    if (canal == CanalTipo.TELEGRAM) {
-                        pacienteRepository.findByTelegramChatId(canalUsuarioId).ifPresent(nova::setPaciente);
-                    }
-                    return sessaoRepository.save(nova);
-                });
+        // Tenta buscar sessão ativa mais recente
+        Optional<SessaoAtendimento> sessaoAtivaOpt = sessaoRepository
+                .findTopByCanalAndCanalUsuarioIdAndStatusNotOrderByDataUltimaInteracaoDesc(canal, canalUsuarioId, StatusSessao.FINALIZADO);
+
+        if (sessaoAtivaOpt.isPresent()) {
+            return sessaoAtivaOpt.get();
+        }
+
+        // Se não houver sessão ativa (ou a anterior foi finalizada), cria uma nova
+        SessaoAtendimento nova = new SessaoAtendimento(canal, canalUsuarioId);
+        if (canal == CanalTipo.TELEGRAM) {
+            pacienteRepository.findByTelegramChatId(canalUsuarioId).ifPresent(nova::setPaciente);
+        } else if (canal == CanalTipo.WHATSAPP) {
+            String cleanNumber = canalUsuarioId.replaceAll("[^0-9]", "");
+            pacienteRepository.findByWhatsappNumber(cleanNumber)
+                    .or(() -> pacienteRepository.findByWhatsappNumber(canalUsuarioId))
+                    .ifPresent(nova::setPaciente);
+        }
+
+        return sessaoRepository.save(nova);
     }
 
     @Transactional
@@ -68,6 +79,16 @@ public class ConversationalEngineService {
         // 1. Gravar mensagem do paciente
         Mensagem msgPaciente = new Mensagem(sessao, RemetenteTipo.PACIENTE, texto);
         mensagemRepository.save(msgPaciente);
+
+        // Se a sessão estava finalizada e o usuário enviou nova mensagem, reabre como bot
+        if (sessao.getStatus() == StatusSessao.FINALIZADO) {
+            sessao.setStatus(StatusSessao.BOT);
+            if (sessao.getPaciente() != null) {
+                sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
+            } else {
+                sessao.setEstadoConversa(EstadoConversa.AGUARDANDO_CPF);
+            }
+        }
 
         // 2. Se a sessão estiver em atendimento humano, não responder com o bot
         if (sessao.getStatus() == StatusSessao.EM_ATENDIMENTO_HUMANO) {
@@ -87,8 +108,20 @@ public class ConversationalEngineService {
             return alertaEmergencia;
         }
 
-        // 4. Comando de reset / voltar ao menu
-        if (texto.equalsIgnoreCase("menu") || texto.equalsIgnoreCase("/menu") || texto.equalsIgnoreCase("inicio") || texto.equalsIgnoreCase("/start")) {
+        // 4. Comando explícito de encerramento pelo cliente
+        String textoLower = texto.toLowerCase();
+        if (COMANDOS_ENCERRAR.contains(textoLower)) {
+            return finalizarAtendimentoCliente(sessao);
+        }
+
+        // 5. Comando de reset / voltar ao menu
+        if (textoLower.equals("menu") || textoLower.equals("/menu") || textoLower.equals("inicio") || textoLower.equals("/start")) {
+            sessao.setTempEspecialidadeId(null);
+            sessao.setTempMedicoId(null);
+            sessao.setTempCpf(null);
+            sessao.setTempNome(null);
+            sessao.setTempTelefone(null);
+
             if (sessao.getPaciente() == null) {
                 sessao.setEstadoConversa(EstadoConversa.AGUARDANDO_CPF);
                 String msg = "👋 *Olá! Bem-vindo à Clínica OmniMed Care.*\n\n"
@@ -106,9 +139,12 @@ public class ConversationalEngineService {
             }
         }
 
-        // 5. Máquina de estados
+        // 6. Máquina de estados
         String respostaBot = switch (sessao.getEstadoConversa()) {
             case INICIO, AGUARDANDO_CPF -> tratarAguardandoCpf(sessao, texto, canal, canalUsuarioId);
+            case CADASTRO_NOME -> tratarCadastroNome(sessao, texto, canal, canalUsuarioId);
+            case CADASTRO_TELEFONE -> tratarCadastroTelefone(sessao, texto, canal, canalUsuarioId);
+            case CADASTRO_EMAIL -> tratarCadastroEmail(sessao, texto, canal, canalUsuarioId);
             case MENU_PRINCIPAL -> tratarMenuPrincipal(sessao, texto);
             case ESCOLHENDO_ESPECIALIDADE -> tratarEscolhaEspecialidade(sessao, texto);
             case ESCOLHENDO_MEDICO -> tratarEscolhaMedico(sessao, texto);
@@ -116,6 +152,13 @@ public class ConversationalEngineService {
             case CONSULTANDO_AGENDAMENTOS -> tratarConsultaAgendamentos(sessao, texto);
             case CONSULTANDO_EXAME -> tratarConsultaExames(sessao, texto);
             case ATENDIMENTO_HUMANO -> "Sua solicitação está na fila da recepção. Um atendente entrará em contato em breve.";
+            case FINALIZADO -> {
+                sessao.setStatus(StatusSessao.BOT);
+                sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
+                yield (sessao.getPaciente() != null)
+                        ? gerarMenuPrincipal(sessao.getPaciente().getNome())
+                        : "Por favor, digite *menu* para iniciar.";
+            }
             default -> {
                 sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
                 yield (sessao.getPaciente() != null)
@@ -129,6 +172,25 @@ public class ConversationalEngineService {
         return respostaBot;
     }
 
+    private String finalizarAtendimentoCliente(SessaoAtendimento sessao) {
+        sessao.setStatus(StatusSessao.FINALIZADO);
+        sessao.setEstadoConversa(EstadoConversa.FINALIZADO);
+        sessao.setTempEspecialidadeId(null);
+        sessao.setTempMedicoId(null);
+        sessao.setTempCpf(null);
+        sessao.setTempNome(null);
+        sessao.setTempTelefone(null);
+
+        String msgDespedida = "👋 *Atendimento Finalizado com Sucesso!*\n\n"
+                + "Muito obrigado por entrar em contato com a *OmniMed Care*. Cuidar da sua saúde é a nossa prioridade!\n\n"
+                + "Caso precise de novo atendimento a qualquer momento, basta enviar uma mensagem ou digitar *menu*.\n\n"
+                + "Tenha um excelente dia! 🩺✨";
+
+        gravarRespostaBot(sessao, msgDespedida);
+        sessaoRepository.save(sessao);
+        return msgDespedida;
+    }
+
     private String tratarAguardandoCpf(SessaoAtendimento sessao, String texto, CanalTipo canal, String canalUsuarioId) {
         String cpfLimpo = texto.replaceAll("[^0-9]", "");
         if (cpfLimpo.length() != 11) {
@@ -136,29 +198,93 @@ public class ConversationalEngineService {
         }
 
         Optional<Paciente> pacienteOpt = pacienteRepository.findByCpf(cpfLimpo);
-        Paciente paciente;
         if (pacienteOpt.isPresent()) {
-            paciente = pacienteOpt.get();
-            if (canal == CanalTipo.TELEGRAM && paciente.getTelegramChatId() == null) {
+            Paciente paciente = pacienteOpt.get();
+            if (canal == CanalTipo.TELEGRAM && (paciente.getTelegramChatId() == null || paciente.getTelegramChatId().isBlank())) {
                 paciente.setTelegramChatId(canalUsuarioId);
                 pacienteRepository.save(paciente);
+            } else if (canal == CanalTipo.WHATSAPP && (paciente.getWhatsappNumber() == null || paciente.getWhatsappNumber().isBlank())) {
+                paciente.setWhatsappNumber(canalUsuarioId.replaceAll("[^0-9]", ""));
+                pacienteRepository.save(paciente);
             }
+
+            sessao.setPaciente(paciente);
+            sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
+            return "✅ Identificação realizada com sucesso!\n\n" + gerarMenuPrincipal(paciente.getNome());
         } else {
-            // Cria um cadastro preliminar com o CPF informado
-            paciente = new Paciente(
-                    "Paciente " + cpfLimpo.substring(0, 3) + "***",
-                    cpfLimpo,
-                    "",
-                    "",
-                    canal == CanalTipo.TELEGRAM ? canalUsuarioId : null
-            );
-            paciente = pacienteRepository.save(paciente);
+            // Inicia fluxo conversacional interativo de cadastro
+            sessao.setTempCpf(cpfLimpo);
+            sessao.setEstadoConversa(EstadoConversa.CADASTRO_NOME);
+
+            String cpfFormatado = formatarCpf(cpfLimpo);
+            return "🔍 *Não localizamos um cadastro para o CPF informado (" + cpfFormatado + ").*\n\n"
+                    + "Para agendar consultas e consultar seus exames, vamos realizar seu cadastro agora mesmo. É super rápido!\n\n"
+                    + "👉 *Por favor, digite o seu Nome Completo:*";
+        }
+    }
+
+    private String tratarCadastroNome(SessaoAtendimento sessao, String texto, CanalTipo canal, String canalUsuarioId) {
+        if (texto.isBlank() || texto.trim().length() < 3) {
+            return "❌ Por favor, informe seu nome e sobrenome completos (pelo menos 3 letras):";
         }
 
-        sessao.setPaciente(paciente);
-        sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
+        sessao.setTempNome(texto.trim());
+        sessao.setEstadoConversa(EstadoConversa.CADASTRO_TELEFONE);
 
-        return "✅ Identificação realizada com sucesso!\n\n" + gerarMenuPrincipal(paciente.getNome());
+        String dicaTelefone = "";
+        if (canal == CanalTipo.WHATSAPP) {
+            dicaTelefone = "\n_(Ou digite *sim* para confirmar o uso do número deste WhatsApp)_";
+        }
+
+        return "Muito prazer, *" + texto.trim() + "*! 🤝\n\n"
+                + "Agora, por favor informe seu *número de telefone / celular com DDD* (Ex: 11988887777):"
+                + dicaTelefone;
+    }
+
+    private String tratarCadastroTelefone(SessaoAtendimento sessao, String texto, CanalTipo canal, String canalUsuarioId) {
+        String telefone;
+        if (canal == CanalTipo.WHATSAPP && (texto.equalsIgnoreCase("sim") || texto.equalsIgnoreCase("ok") || texto.equalsIgnoreCase("usar este"))) {
+            telefone = canalUsuarioId.replaceAll("[^0-9]", "");
+        } else {
+            telefone = texto.replaceAll("[^0-9]", "");
+        }
+
+        if (telefone.length() < 8) {
+            return "❌ Número de telefone inválido. Por favor, digite seu número com DDD (ex: 11988887777):";
+        }
+
+        sessao.setTempTelefone(telefone);
+        sessao.setEstadoConversa(EstadoConversa.CADASTRO_EMAIL);
+
+        return "Perfeito! 📧\n\n"
+                + "Por fim, informe seu *e-mail* para envio de confirmações e laudos\n"
+                + "_(ou digite *pular* caso não deseje cadastrar e-mail agora)_:";
+    }
+
+    private String tratarCadastroEmail(SessaoAtendimento sessao, String texto, CanalTipo canal, String canalUsuarioId) {
+        String email = texto.equalsIgnoreCase("pular") ? "" : texto.trim();
+
+        // Salva novo paciente
+        Paciente novoPaciente = new Paciente(
+                sessao.getTempNome(),
+                sessao.getTempCpf(),
+                sessao.getTempTelefone(),
+                email,
+                canal == CanalTipo.TELEGRAM ? canalUsuarioId : null,
+                canal == CanalTipo.WHATSAPP ? canalUsuarioId.replaceAll("[^0-9]", "") : null
+        );
+
+        novoPaciente = pacienteRepository.save(novoPaciente);
+
+        sessao.setPaciente(novoPaciente);
+        sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
+        sessao.setTempCpf(null);
+        sessao.setTempNome(null);
+        sessao.setTempTelefone(null);
+
+        return "🎉 *CADASTRO REALIZADO COM SUCESSO!*\n\n"
+                + "Seja muito bem-vindo(a) à OmniMed Care, *" + novoPaciente.getNome() + "*!\n\n"
+                + gerarMenuPrincipal(novoPaciente.getNome());
     }
 
     private String gerarMenuPrincipal(String nomePaciente) {
@@ -167,7 +293,8 @@ public class ConversationalEngineService {
                 + "2️⃣ *Minhas Consultas Agendadas*\n"
                 + "3️⃣ *Consultar Meus Exames / Laudos*\n"
                 + "4️⃣ *Informações e Convênios*\n"
-                + "5️⃣ *Falar com um Atendente Humano*\n\n"
+                + "5️⃣ *Falar com um Atendente Humano*\n"
+                + "6️⃣ *Encerrar Atendimento*\n\n"
                 + "👉 _Digite o número da opção desejada:_";
     }
 
@@ -197,9 +324,9 @@ public class ConversationalEngineService {
                       .append("   Médico: ").append(a.medicoNome()).append("\n")
                       .append("   Data: ").append(a.dataHora().format(DATE_FORMATTER)).append("\n")
                       .append("   Status: ").append(a.status()).append("\n")
-                      .append("   Protocolo: ").append(a.protocolo()).append("\n\n");
+                      .append("   Protocolo: `").append(a.protocolo()).append("`\n\n");
                 }
-                sb.append("Para cancelar algum agendamento, digite *cancelar <número do item>*\nOu digite *menu* para voltar.");
+                sb.append("Para cancelar algum agendamento, digite *cancelar <número do item>*\nOu digite *menu* para voltar ao menu principal.");
                 return sb.toString();
             }
             case "3" -> {
@@ -220,7 +347,7 @@ public class ConversationalEngineService {
                     }
                     sb.append("\n");
                 }
-                sb.append("👉 _Digite 'menu' para voltar ao menu principal._");
+                sb.append("👉 _Digite 'menu' para voltar ao menu principal ou 'encerrar' para finalizar._");
                 return sb.toString();
             }
             case "4" -> {
@@ -229,7 +356,7 @@ public class ConversationalEngineService {
                         + "🕒 *Horário de Atendimento:* Seg a Sex das 07h às 19h | Sáb das 08h às 13h\n"
                         + "💳 *Convênios Aceitos:* Unimed, Bradesco Saúde, SulAmérica, Amil, NotreDame Intermédica e Particular.\n"
                         + "📞 *Telefone Central:* (11) 4002-8922\n\n"
-                        + "👉 _Digite 'menu' para voltar ao início._";
+                        + "👉 _Digite 'menu' para voltar ao início ou 'encerrar' para finalizar._";
             }
             case "5" -> {
                 sessao.setStatus(StatusSessao.AGUARDANDO_HUMANO);
@@ -239,8 +366,11 @@ public class ConversationalEngineService {
                         + "Um atendente humano assumirá esta conversa em breve aqui mesmo neste canal.\n\n"
                         + "_Por favor, descreva detalhadamente sua solicitação enquanto aguarda._";
             }
+            case "6" -> {
+                return finalizarAtendimentoCliente(sessao);
+            }
             default -> {
-                return "Opção não reconhecida. Por favor, digite um número de *1 a 5* ou digite *menu*.";
+                return "Opção não reconhecida. Por favor, digite um número de *1 a 6*, ou digite *menu*.";
             }
         }
     }
@@ -257,7 +387,7 @@ public class ConversationalEngineService {
                 List<Medico> medicos = medicoRepository.findByEspecialidadeIdAndAtivoTrue(esp.getId());
                 if (medicos.isEmpty()) {
                     sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
-                    return "ℹ️ Nenhum médico com agenda ativa encontrado para a especialidade " + esp.getNome() + ".\nDigite *menu* para voltar.";
+                    return "ℹ️ Nenhum médico ativo encontrado para a especialidade " + esp.getNome() + ".\nDigite *menu* para voltar.";
                 }
 
                 StringBuilder sb = new StringBuilder("👨‍⚕️ *Médicos Disponíveis em " + esp.getNome() + ":*\n\n");
@@ -328,8 +458,8 @@ public class ConversationalEngineService {
                         + "👨‍⚕️ *Médico:* " + medico.getNome() + "\n"
                         + "🗓️ *Data e Hora:* " + agendamento.getDataHora().format(DATE_FORMATTER) + "\n"
                         + "📍 *Local:* Av. Paulista, 1500 - 8º Andar\n\n"
-                        + "Enviaremos um lembrete 24h antes do horário. Obrigado por escolher a OmniMed Care!\n\n"
-                        + "👉 _Digite 'menu' para voltar ao início._";
+                        + "Enviaremos lembrete antes do horário. Obrigado por escolher a OmniMed Care!\n\n"
+                        + "👉 _Digite 'menu' para voltar ao início ou 'encerrar' para finalizar o atendimento._";
             }
         } catch (NumberFormatException ignored) {}
 
@@ -346,7 +476,7 @@ public class ConversationalEngineService {
                     if (index >= 0 && index < lista.size()) {
                         agendamentoService.cancelarAgendamento(lista.get(index).id());
                         sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
-                        return "✅ Agendamento cancelado com sucesso. O horário foi liberado em nossa agenda.\n\nDigite *menu* para voltar.";
+                        return "✅ Agendamento cancelado com sucesso. O horário foi liberado em nossa agenda.\n\nDigite *menu* para voltar ou *encerrar* para finalizar.";
                     }
                 } catch (Exception ignored) {}
             }
@@ -373,5 +503,10 @@ public class ConversationalEngineService {
             Mensagem msg = new Mensagem(sessao, RemetenteTipo.BOT, conteudo);
             mensagemRepository.save(msg);
         }
+    }
+
+    private String formatarCpf(String cpf) {
+        if (cpf == null || cpf.length() != 11) return cpf;
+        return cpf.substring(0, 3) + "." + cpf.substring(3, 6) + "." + cpf.substring(6, 9) + "-" + cpf.substring(9, 11);
     }
 }

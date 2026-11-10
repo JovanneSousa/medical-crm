@@ -54,18 +54,50 @@ export interface Agendamento {
   criadoEm: string;
 }
 
+export interface Especialidade {
+  id: number;
+  nome: string;
+  descricao: string;
+}
+
 export interface Medico {
   id: number;
   nome: string;
   crm: string;
-  especialidade: {
-    id: number;
-    nome: string;
-    descricao: string;
-  };
+  especialidade: Especialidade;
   email: string;
   telefone: string;
   ativo: boolean;
+}
+
+export interface MedicoRequest {
+  nome: string;
+  crm: string;
+  especialidadeId: number;
+  email: string;
+  telefone: string;
+  ativo?: boolean;
+}
+
+export interface Paciente {
+  id: number;
+  nome: string;
+  cpf: string;
+  telefone: string;
+  email: string;
+  telegramChatId: string | null;
+  whatsappNumber: string | null;
+  dataCadastro: string;
+  totalAgendamentos: number;
+}
+
+export interface PacienteRequest {
+  nome: string;
+  cpf: string;
+  telefone: string;
+  email: string;
+  telegramChatId?: string | null;
+  whatsappNumber?: string | null;
 }
 
 export interface HorarioAtendimento {

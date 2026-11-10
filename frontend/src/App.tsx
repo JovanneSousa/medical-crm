@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
 import { LiveChatView } from './components/LiveChatView';
 import { AgendamentosView } from './components/AgendamentosView';
+import { PacientesView } from './components/PacientesView';
 import { MedicosView } from './components/MedicosView';
 import { SimuladorView } from './components/SimuladorView';
 import type { DashboardStats } from './types';
@@ -46,6 +47,7 @@ export function App() {
         )}
         {currentTab === 'livechat' && <LiveChatView />}
         {currentTab === 'agendamentos' && <AgendamentosView />}
+        {currentTab === 'pacientes' && <PacientesView />}
         {currentTab === 'medicos' && <MedicosView />}
         {currentTab === 'simulador' && <SimuladorView />}
       </main>
