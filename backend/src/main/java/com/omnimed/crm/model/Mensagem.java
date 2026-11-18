@@ -1,15 +1,22 @@
 package com.omnimed.crm.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
 
+/**
+ * Representa uma mensagem trocada dentro de uma sessão de atendimento omnichannel.
+ */
 @Entity
 @Table(name = "mensagens")
-public class Mensagem {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Mensagem extends EntidadeBase {
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "sessao_id")
@@ -33,19 +40,11 @@ public class Mensagem {
     }
 
     public Mensagem(SessaoAtendimento sessao, RemetenteTipo remetente, String conteudo) {
-        this.sessao = sessao;
-        this.remetente = remetente;
-        this.conteudo = conteudo;
+        setSessao(sessao);
+        setRemetente(remetente);
+        setConteudo(conteudo);
         this.dataHora = LocalDateTime.now();
         this.lida = false;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public SessaoAtendimento getSessao() {
@@ -69,7 +68,7 @@ public class Mensagem {
     }
 
     public void setConteudo(String conteudo) {
-        this.conteudo = conteudo;
+        this.conteudo = conteudo != null ? conteudo : "";
     }
 
     public LocalDateTime getDataHora() {
@@ -85,6 +84,10 @@ public class Mensagem {
     }
 
     public void setLida(Boolean lida) {
-        this.lida = lida;
+        this.lida = lida != null ? lida : Boolean.FALSE;
+    }
+
+    public void marcarComoLida() {
+        this.lida = true;
     }
 }

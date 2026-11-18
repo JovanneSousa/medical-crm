@@ -1,22 +1,31 @@
 package com.omnimed.crm.model;
 
-import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
 
+/**
+ * Representa uma sessão de atendimento omnichannel com um paciente ou visitante.
+ * Encapsula as transições de estado da máquina conversacional e dados temporários de fluxo.
+ */
 @Entity
 @Table(name = "sessoes_atendimento")
-public class SessaoAtendimento {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class SessaoAtendimento extends EntidadeBase {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private CanalTipo canal;
 
     @Column(name = "canal_usuario_id", nullable = false, length = 100)
-    private String canalUsuarioId; // Ex: Telegram ChatId, WhatsApp Number ou UUID de WebChat
+    private String canalUsuarioId;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "paciente_id")
@@ -30,7 +39,6 @@ public class SessaoAtendimento {
     @Column(name = "estado_conversa", nullable = false, length = 40)
     private EstadoConversa estadoConversa;
 
-    // Metadados temporários da sessão para orquestração guiada e cadastro
     @Column(name = "temp_especialidade_id")
     private Long tempEspecialidadeId;
 
@@ -60,21 +68,130 @@ public class SessaoAtendimento {
     }
 
     public SessaoAtendimento(CanalTipo canal, String canalUsuarioId) {
+        this();
         this.canal = canal;
         this.canalUsuarioId = canalUsuarioId;
-        this.dataInicio = LocalDateTime.now();
+    }
+
+    // --- Métodos de encapsulamento do ciclo de vida da sessão ---
+
+    public void registrarInteracao() {
         this.dataUltimaInteracao = LocalDateTime.now();
+    }
+
+    public void reabrirSeFinalizada() {
+        if (this.status == StatusSessao.FINALIZADO) {
+            this.status = StatusSessao.BOT;
+            this.estadoConversa = (this.paciente != null)
+                    ? EstadoConversa.MENU_PRINCIPAL
+                    : EstadoConversa.AGUARDANDO_CPF;
+        }
+    }
+
+    public void limparDadosTemporarios() {
+        this.tempEspecialidadeId = null;
+        this.tempMedicoId = null;
+        this.tempCpf = null;
+        this.tempNome = null;
+        this.tempTelefone = null;
+    }
+
+    public void reiniciarFluxoParaInicio() {
+        limparDadosTemporarios();
         this.status = StatusSessao.BOT;
-        this.estadoConversa = EstadoConversa.INICIO;
+        this.estadoConversa = (this.paciente != null)
+                ? EstadoConversa.MENU_PRINCIPAL
+                : EstadoConversa.AGUARDANDO_CPF;
     }
 
-    public Long getId() {
-        return id;
+    public void identificarPaciente(Paciente paciente) {
+        this.paciente = paciente;
+        this.estadoConversa = EstadoConversa.MENU_PRINCIPAL;
+        limparDadosTemporarios();
     }
 
-    public void setId(Long id) {
-        this.id = id;
+    public void iniciarCadastroComCpf(String cpfLimpo) {
+        this.tempCpf = cpfLimpo;
+        this.estadoConversa = EstadoConversa.CADASTRO_NOME;
     }
+
+    public void registrarNomeCadastro(String nome) {
+        this.tempNome = nome;
+        this.estadoConversa = EstadoConversa.CADASTRO_TELEFONE;
+    }
+
+    public void registrarTelefoneCadastro(String telefone) {
+        this.tempTelefone = telefone;
+        this.estadoConversa = EstadoConversa.CADASTRO_EMAIL;
+    }
+
+    public void concluirCadastro(Paciente novoPaciente) {
+        identificarPaciente(novoPaciente);
+    }
+
+    public void iniciarEscolhaEspecialidade() {
+        this.estadoConversa = EstadoConversa.ESCOLHENDO_ESPECIALIDADE;
+    }
+
+    public void selecionarEspecialidade(Long especialidadeId) {
+        this.tempEspecialidadeId = especialidadeId;
+        this.estadoConversa = EstadoConversa.ESCOLHENDO_MEDICO;
+    }
+
+    public void selecionarMedico(Long medicoId) {
+        this.tempMedicoId = medicoId;
+        this.estadoConversa = EstadoConversa.ESCOLHENDO_HORARIO;
+    }
+
+    public void retornarAoMenuPrincipal() {
+        this.tempEspecialidadeId = null;
+        this.tempMedicoId = null;
+        this.estadoConversa = EstadoConversa.MENU_PRINCIPAL;
+    }
+
+    public void iniciarConsultaAgendamentos() {
+        this.estadoConversa = EstadoConversa.CONSULTANDO_AGENDAMENTOS;
+    }
+
+    public void iniciarConsultaExames() {
+        this.estadoConversa = EstadoConversa.CONSULTANDO_EXAME;
+    }
+
+    public void transbordarParaAtendente() {
+        this.status = StatusSessao.AGUARDANDO_HUMANO;
+        this.estadoConversa = EstadoConversa.ATENDIMENTO_HUMANO;
+    }
+
+    public void assumirPorAtendente() {
+        this.status = StatusSessao.EM_ATENDIMENTO_HUMANO;
+        this.estadoConversa = EstadoConversa.ATENDIMENTO_HUMANO;
+        registrarInteracao();
+    }
+
+    public void devolverParaBot() {
+        this.status = StatusSessao.BOT;
+        this.estadoConversa = EstadoConversa.MENU_PRINCIPAL;
+        registrarInteracao();
+    }
+
+    public void finalizar() {
+        this.status = StatusSessao.FINALIZADO;
+        this.estadoConversa = EstadoConversa.FINALIZADO;
+        limparDadosTemporarios();
+        registrarInteracao();
+    }
+
+    @JsonIgnore
+    public boolean isEmAtendimentoHumano() {
+        return this.status == StatusSessao.EM_ATENDIMENTO_HUMANO;
+    }
+
+    @JsonIgnore
+    public boolean isFinalizada() {
+        return this.status == StatusSessao.FINALIZADO;
+    }
+
+    // --- Getters e Setters ---
 
     public CanalTipo getCanal() {
         return canal;

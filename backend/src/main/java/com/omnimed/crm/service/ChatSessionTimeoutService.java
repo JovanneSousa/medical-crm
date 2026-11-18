@@ -1,6 +1,10 @@
 package com.omnimed.crm.service;
 
-import com.omnimed.crm.model.*;
+import com.omnimed.crm.channel.DespachanteCanalService;
+import com.omnimed.crm.model.Mensagem;
+import com.omnimed.crm.model.RemetenteTipo;
+import com.omnimed.crm.model.SessaoAtendimento;
+import com.omnimed.crm.model.StatusSessao;
 import com.omnimed.crm.repository.MensagemRepository;
 import com.omnimed.crm.repository.SessaoAtendimentoRepository;
 import org.slf4j.Logger;
@@ -23,17 +27,14 @@ public class ChatSessionTimeoutService {
 
     private final SessaoAtendimentoRepository sessaoRepository;
     private final MensagemRepository mensagemRepository;
-    private final TelegramBotService telegramBotService;
-    private final WhatsAppService whatsAppService;
+    private final DespachanteCanalService despachanteCanalService;
 
     public ChatSessionTimeoutService(SessaoAtendimentoRepository sessaoRepository,
                                      MensagemRepository mensagemRepository,
-                                     TelegramBotService telegramBotService,
-                                     WhatsAppService whatsAppService) {
+                                     DespachanteCanalService despachanteCanalService) {
         this.sessaoRepository = sessaoRepository;
         this.mensagemRepository = mensagemRepository;
-        this.telegramBotService = telegramBotService;
-        this.whatsAppService = whatsAppService;
+        this.despachanteCanalService = despachanteCanalService;
     }
 
     @Scheduled(fixedDelayString = "${omnimed.chat.timeout-check-interval-ms:60000}")
@@ -56,9 +57,7 @@ public class ChatSessionTimeoutService {
         }
 
         for (SessaoAtendimento sessao : sessoesInativas) {
-            sessao.setStatus(StatusSessao.FINALIZADO);
-            sessao.setEstadoConversa(EstadoConversa.FINALIZADO);
-            sessao.setDataUltimaInteracao(LocalDateTime.now());
+            sessao.finalizar();
             sessaoRepository.save(sessao);
 
             String aviso = "⏳ *Atendimento encerrado por inatividade.*\n\n"
@@ -66,15 +65,8 @@ public class ChatSessionTimeoutService {
                     + "Esta sessão foi encerrada com segurança.\n\n"
                     + "Quando desejar falar conosco novamente, basta enviar um 'olá' ou digitar *menu*! 🩺";
 
-            Mensagem msg = new Mensagem(sessao, RemetenteTipo.SISTEMA, aviso);
-            mensagemRepository.save(msg);
-
-            // Notifica o canal
-            if (sessao.getCanal() == CanalTipo.TELEGRAM) {
-                telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-            } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
-                whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-            }
+            mensagemRepository.save(new Mensagem(sessao, RemetenteTipo.SISTEMA, aviso));
+            despachanteCanalService.enviarMensagem(sessao.getCanal(), sessao.getCanalUsuarioId(), aviso);
         }
     }
 }

@@ -97,8 +97,7 @@ public class DataInitializerService implements CommandLineRunner {
         // 7. Sessão de atendimento simulada (na fila da recepção para teste do livechat)
         SessaoAtendimento sessaoTransbordo = new SessaoAtendimento(CanalTipo.TELEGRAM, "telegram_user_999");
         sessaoTransbordo.setPaciente(lucas);
-        sessaoTransbordo.setStatus(StatusSessao.AGUARDANDO_HUMANO);
-        sessaoTransbordo.setEstadoConversa(EstadoConversa.ATENDIMENTO_HUMANO);
+        sessaoTransbordo.transbordarParaAtendente();
         sessaoTransbordo = sessaoRepository.save(sessaoTransbordo);
 
         mensagemRepository.save(new Mensagem(sessaoTransbordo, RemetenteTipo.PACIENTE, "Olá, boa tarde! Gostaria de saber se vocês aceitam a guia emitida pelo convênio Amil para cirurgia ambulatorial?"));

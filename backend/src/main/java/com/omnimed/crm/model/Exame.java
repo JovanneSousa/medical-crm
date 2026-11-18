@@ -1,22 +1,24 @@
 package com.omnimed.crm.model;
 
-import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Table;
+
 import java.time.LocalDate;
 
+/**
+ * Representa um exame laboratorial ou de imagem vinculado a um paciente.
+ * Herda de {@link RegistroClinico} e implementa formatação polimórfica para chat.
+ */
 @Entity
 @Table(name = "exames")
-public class Exame {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Exame extends RegistroClinico {
 
     @Column(name = "codigo_exame", nullable = false, unique = true, length = 30)
     private String codigoExame;
-
-    @ManyToOne(optional = false, fetch = FetchType.EAGER)
-    @JoinColumn(name = "paciente_id")
-    private Paciente paciente;
 
     @Column(name = "tipo_exame", nullable = false, length = 150)
     private String tipoExame;
@@ -31,27 +33,17 @@ public class Exame {
     @Column(name = "laudo_url", length = 300)
     private String laudoUrl;
 
-    @Column(length = 500)
-    private String observacoes;
-
-    public Exame() {}
-
-    public Exame(String codigoExame, Paciente paciente, String tipoExame, LocalDate dataColeta, StatusExame status, String laudoUrl, String observacoes) {
-        this.codigoExame = codigoExame;
-        this.paciente = paciente;
-        this.tipoExame = tipoExame;
-        this.dataColeta = dataColeta;
-        this.status = status;
-        this.laudoUrl = laudoUrl;
-        this.observacoes = observacoes;
+    public Exame() {
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
+    public Exame(String codigoExame, Paciente paciente, String tipoExame, LocalDate dataColeta,
+                 StatusExame status, String laudoUrl, String observacoes) {
+        super(paciente, observacoes);
+        setCodigoExame(codigoExame);
+        setTipoExame(tipoExame);
+        setDataColeta(dataColeta);
+        setStatus(status);
+        setLaudoUrl(laudoUrl);
     }
 
     public String getCodigoExame() {
@@ -59,15 +51,10 @@ public class Exame {
     }
 
     public void setCodigoExame(String codigoExame) {
-        this.codigoExame = codigoExame;
-    }
-
-    public Paciente getPaciente() {
-        return paciente;
-    }
-
-    public void setPaciente(Paciente paciente) {
-        this.paciente = paciente;
+        if (codigoExame == null || codigoExame.isBlank()) {
+            throw new IllegalArgumentException("O código do exame é obrigatório.");
+        }
+        this.codigoExame = codigoExame.trim();
     }
 
     public String getTipoExame() {
@@ -75,7 +62,10 @@ public class Exame {
     }
 
     public void setTipoExame(String tipoExame) {
-        this.tipoExame = tipoExame;
+        if (tipoExame == null || tipoExame.isBlank()) {
+            throw new IllegalArgumentException("O tipo do exame é obrigatório.");
+        }
+        this.tipoExame = tipoExame.trim();
     }
 
     public LocalDate getDataColeta() {
@@ -83,6 +73,9 @@ public class Exame {
     }
 
     public void setDataColeta(LocalDate dataColeta) {
+        if (dataColeta == null) {
+            throw new IllegalArgumentException("A data de coleta do exame é obrigatória.");
+        }
         this.dataColeta = dataColeta;
     }
 
@@ -91,7 +84,7 @@ public class Exame {
     }
 
     public void setStatus(StatusExame status) {
-        this.status = status;
+        this.status = status != null ? status : StatusExame.EM_ANALISE;
     }
 
     public String getLaudoUrl() {
@@ -99,14 +92,41 @@ public class Exame {
     }
 
     public void setLaudoUrl(String laudoUrl) {
-        this.laudoUrl = laudoUrl;
+        this.laudoUrl = (laudoUrl != null && !laudoUrl.isBlank()) ? laudoUrl.trim() : null;
     }
 
-    public String getObservacoes() {
-        return observacoes;
+    public void disponibilizarLaudo(String url) {
+        setLaudoUrl(url);
+        this.status = StatusExame.DISPONIVEL;
     }
 
-    public void setObservacoes(String observacoes) {
-        this.observacoes = observacoes;
+    public void marcarComoRetirado() {
+        this.status = StatusExame.RETIRADO;
+    }
+
+    @Override
+    @JsonIgnore
+    public String getCodigoIdentificador() {
+        return codigoExame;
+    }
+
+    @Override
+    @JsonIgnore
+    public String formatarParaChat() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("• *").append(tipoExame).append("*\n")
+          .append("  Código: ").append(codigoExame).append("\n")
+          .append("  Data da Coleta: ").append(dataColeta).append("\n")
+          .append("  Status: *").append(status).append("*\n");
+        if (laudoUrl != null && !laudoUrl.isBlank()) {
+            sb.append("  📄 Laudo online: ").append(laudoUrl).append("\n");
+        }
+        return sb.toString();
+    }
+
+    @Override
+    @JsonIgnore
+    public boolean estaAtivo() {
+        return status != StatusExame.RETIRADO;
     }
 }

@@ -1,3 +1,9 @@
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\channel\AbstractCanalComunicacao.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\channel\CanalComunicacao.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\channel\DespachanteCanalService.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\channel\TelegramCanalComunicacao.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\channel\WebChatCanalComunicacao.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\channel\WhatsAppCanalComunicacao.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\config\CorsConfig.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\controller\AgendamentoController.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\controller\AtendimentoController.java
@@ -16,6 +22,7 @@ C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\dto\Pacien
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\dto\SessaoDTO.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Agendamento.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\CanalTipo.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\EntidadeBase.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Especialidade.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\EstadoConversa.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Exame.java
@@ -23,6 +30,8 @@ C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Hora
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Medico.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Mensagem.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Paciente.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\Pessoa.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\RegistroClinico.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\RemetenteTipo.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\SessaoAtendimento.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\model\StatusAgendamento.java
@@ -38,6 +47,20 @@ C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\repository
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\repository\PacienteRepository.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\repository\SessaoAtendimentoRepository.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\AgendamentoService.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\AbstractEstadoConversaHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\AtendimentoHumanoHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\CadastroEmailHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\CadastroNomeHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\CadastroTelefoneHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\ConsultaAgendamentosHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\ConsultaExamesHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\EscolhaEspecialidadeHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\EscolhaHorarioHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\EscolhaMedicoHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\EstadoConversaHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\IdentificacaoCpfHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\MenuPrincipalHandler.java
+C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\chatbot\SessaoFinalizadaHandler.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\ChatSessionTimeoutService.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\ConversationalEngineService.java
 C:\dev\backend\java\medical-crm\backend\src\main\java\com\omnimed\crm\service\DataInitializerService.java

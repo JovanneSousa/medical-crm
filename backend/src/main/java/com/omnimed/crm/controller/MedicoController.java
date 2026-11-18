@@ -129,7 +129,7 @@ public class MedicoController {
         // Se houver agendamentos associados a este médico, inativa para manter integridade histórica
         boolean temAgendamentos = !agendamentoRepository.findByMedicoIdOrderByDataHoraAsc(id).isEmpty();
         if (temAgendamentos) {
-            medico.setAtivo(false);
+            medico.inativar();
             medicoRepository.save(medico);
             return ResponseEntity.ok(java.util.Map.of(
                     "mensagem", "Médico possui histórico de consultas e foi inativado com sucesso.",

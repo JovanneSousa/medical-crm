@@ -1,19 +1,26 @@
 package com.omnimed.crm.controller;
 
+import com.omnimed.crm.channel.DespachanteCanalService;
 import com.omnimed.crm.dto.MensagemDTO;
 import com.omnimed.crm.dto.NovaMensagemDTO;
 import com.omnimed.crm.dto.SessaoDTO;
-import com.omnimed.crm.model.*;
+import com.omnimed.crm.model.Mensagem;
+import com.omnimed.crm.model.RemetenteTipo;
+import com.omnimed.crm.model.SessaoAtendimento;
+import com.omnimed.crm.model.StatusSessao;
 import com.omnimed.crm.repository.MensagemRepository;
 import com.omnimed.crm.repository.SessaoAtendimentoRepository;
-import com.omnimed.crm.service.TelegramBotService;
-import com.omnimed.crm.service.WhatsAppService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -22,27 +29,21 @@ public class AtendimentoController {
 
     private final SessaoAtendimentoRepository sessaoRepository;
     private final MensagemRepository mensagemRepository;
-    private final TelegramBotService telegramBotService;
-    private final WhatsAppService whatsAppService;
+    private final DespachanteCanalService despachanteCanalService;
 
     public AtendimentoController(SessaoAtendimentoRepository sessaoRepository,
                                  MensagemRepository mensagemRepository,
-                                 TelegramBotService telegramBotService,
-                                 WhatsAppService whatsAppService) {
+                                 DespachanteCanalService despachanteCanalService) {
         this.sessaoRepository = sessaoRepository;
         this.mensagemRepository = mensagemRepository;
-        this.telegramBotService = telegramBotService;
-        this.whatsAppService = whatsAppService;
+        this.despachanteCanalService = despachanteCanalService;
     }
 
     @GetMapping("/sessoes")
     public ResponseEntity<List<SessaoDTO>> listarSessoes(@RequestParam(required = false) StatusSessao status) {
-        List<SessaoAtendimento> sessoes;
-        if (status != null) {
-            sessoes = sessaoRepository.findByStatusOrderByDataUltimaInteracaoDesc(status);
-        } else {
-            sessoes = sessaoRepository.findAll();
-        }
+        List<SessaoAtendimento> sessoes = (status != null)
+                ? sessaoRepository.findByStatusOrderByDataUltimaInteracaoDesc(status)
+                : sessaoRepository.findAll();
 
         List<SessaoDTO> dtos = sessoes.stream().map(s -> {
             List<Mensagem> msgs = mensagemRepository.findTop50BySessaoIdOrderByDataHoraDesc(s.getId());
@@ -69,38 +70,19 @@ public class AtendimentoController {
     @GetMapping("/sessoes/{id}/mensagens")
     public ResponseEntity<List<MensagemDTO>> listarMensagens(@PathVariable Long id) {
         List<Mensagem> msgs = mensagemRepository.findBySessaoIdOrderByDataHoraAsc(id);
-        List<MensagemDTO> dtos = msgs.stream().map(m -> new MensagemDTO(
-                m.getId(),
-                m.getSessao().getId(),
-                m.getRemetente(),
-                m.getConteudo(),
-                m.getDataHora(),
-                m.getLida()
-        )).toList();
+        List<MensagemDTO> dtos = msgs.stream().map(this::toMensagemDTO).toList();
         return ResponseEntity.ok(dtos);
     }
 
     @PostMapping("/sessoes/{id}/assumir")
     @Transactional
     public ResponseEntity<Void> assumirAtendimento(@PathVariable Long id) {
-        SessaoAtendimento sessao = sessaoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sessão não encontrada: " + id));
-
-        sessao.setStatus(StatusSessao.EM_ATENDIMENTO_HUMANO);
-        sessao.setEstadoConversa(EstadoConversa.ATENDIMENTO_HUMANO);
-        sessao.setDataUltimaInteracao(LocalDateTime.now());
+        SessaoAtendimento sessao = buscarSessao(id);
+        sessao.assumirPorAtendente();
         sessaoRepository.save(sessao);
 
-        // Notificar o paciente
         String aviso = "👩‍💼 *Você está falando com a nossa recepção humana.* Como posso te ajudar?";
-        Mensagem msg = new Mensagem(sessao, RemetenteTipo.ATENDENTE, aviso);
-        mensagemRepository.save(msg);
-
-        if (sessao.getCanal() == CanalTipo.TELEGRAM) {
-            telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
-            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-        }
+        registrarEEnviarMensagem(sessao, RemetenteTipo.ATENDENTE, aviso, aviso);
 
         return ResponseEntity.ok().build();
     }
@@ -109,51 +91,29 @@ public class AtendimentoController {
     @Transactional
     public ResponseEntity<MensagemDTO> enviarMensagemAtendente(@PathVariable Long id,
                                                               @Valid @RequestBody NovaMensagemDTO dto) {
-        SessaoAtendimento sessao = sessaoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sessão não encontrada: " + id));
-
-        sessao.setDataUltimaInteracao(LocalDateTime.now());
+        SessaoAtendimento sessao = buscarSessao(id);
+        sessao.registrarInteracao();
         sessaoRepository.save(sessao);
 
-        Mensagem msg = new Mensagem(sessao, RemetenteTipo.ATENDENTE, dto.conteudo());
-        msg = mensagemRepository.save(msg);
+        Mensagem msg = registrarEEnviarMensagem(
+                sessao,
+                RemetenteTipo.ATENDENTE,
+                dto.conteudo(),
+                "👩‍💼 *Atendente:* " + dto.conteudo()
+        );
 
-        if (sessao.getCanal() == CanalTipo.TELEGRAM) {
-            telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), "👩‍💼 *Atendente:* " + dto.conteudo());
-        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
-            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), "👩‍💼 *Atendente:* " + dto.conteudo());
-        }
-
-        return ResponseEntity.ok(new MensagemDTO(
-                msg.getId(),
-                sessao.getId(),
-                msg.getRemetente(),
-                msg.getConteudo(),
-                msg.getDataHora(),
-                msg.getLida()
-        ));
+        return ResponseEntity.ok(toMensagemDTO(msg));
     }
 
     @PostMapping("/sessoes/{id}/devolver-bot")
     @Transactional
     public ResponseEntity<Void> devolverParaBot(@PathVariable Long id) {
-        SessaoAtendimento sessao = sessaoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sessão não encontrada: " + id));
-
-        sessao.setStatus(StatusSessao.BOT);
-        sessao.setEstadoConversa(EstadoConversa.MENU_PRINCIPAL);
-        sessao.setDataUltimaInteracao(LocalDateTime.now());
+        SessaoAtendimento sessao = buscarSessao(id);
+        sessao.devolverParaBot();
         sessaoRepository.save(sessao);
 
         String aviso = "🤖 O atendimento humano foi finalizado e você retornou ao assistente virtual. Digite *menu* a qualquer momento.";
-        Mensagem msg = new Mensagem(sessao, RemetenteTipo.BOT, aviso);
-        mensagemRepository.save(msg);
-
-        if (sessao.getCanal() == CanalTipo.TELEGRAM) {
-            telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
-            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-        }
+        registrarEEnviarMensagem(sessao, RemetenteTipo.BOT, aviso, aviso);
 
         return ResponseEntity.ok().build();
     }
@@ -161,24 +121,38 @@ public class AtendimentoController {
     @PostMapping("/sessoes/{id}/finalizar")
     @Transactional
     public ResponseEntity<Void> finalizar(@PathVariable Long id) {
-        SessaoAtendimento sessao = sessaoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Sessão não encontrada: " + id));
-
-        sessao.setStatus(StatusSessao.FINALIZADO);
-        sessao.setEstadoConversa(EstadoConversa.FINALIZADO);
-        sessao.setDataUltimaInteracao(LocalDateTime.now());
+        SessaoAtendimento sessao = buscarSessao(id);
+        sessao.finalizar();
         sessaoRepository.save(sessao);
 
         String aviso = "✅ Atendimento concluído. Obrigado pelo contato com a OmniMed Care! Tenha um ótimo dia.";
-        Mensagem msg = new Mensagem(sessao, RemetenteTipo.SISTEMA, aviso);
-        mensagemRepository.save(msg);
-
-        if (sessao.getCanal() == CanalTipo.TELEGRAM) {
-            telegramBotService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-        } else if (sessao.getCanal() == CanalTipo.WHATSAPP) {
-            whatsAppService.enviarMensagem(sessao.getCanalUsuarioId(), aviso);
-        }
+        registrarEEnviarMensagem(sessao, RemetenteTipo.SISTEMA, aviso, aviso);
 
         return ResponseEntity.ok().build();
+    }
+
+    private SessaoAtendimento buscarSessao(Long id) {
+        return sessaoRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Sessão não encontrada: " + id));
+    }
+
+    private Mensagem registrarEEnviarMensagem(SessaoAtendimento sessao,
+                                            RemetenteTipo remetente,
+                                            String conteudoHistorico,
+                                            String conteudoCanal) {
+        Mensagem msg = mensagemRepository.save(new Mensagem(sessao, remetente, conteudoHistorico));
+        despachanteCanalService.enviarMensagem(sessao.getCanal(), sessao.getCanalUsuarioId(), conteudoCanal);
+        return msg;
+    }
+
+    private MensagemDTO toMensagemDTO(Mensagem msg) {
+        return new MensagemDTO(
+                msg.getId(),
+                msg.getSessao().getId(),
+                msg.getRemetente(),
+                msg.getConteudo(),
+                msg.getDataHora(),
+                msg.getLida()
+        );
     }
 }

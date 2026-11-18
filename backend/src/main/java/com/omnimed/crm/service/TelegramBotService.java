@@ -2,6 +2,7 @@ package com.omnimed.crm.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.omnimed.crm.channel.TelegramCanalComunicacao;
 import com.omnimed.crm.model.CanalTipo;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -34,14 +35,17 @@ public class TelegramBotService {
     private long pollingIntervalMs;
 
     private final ConversationalEngineService conversationalEngine;
+    private final TelegramCanalComunicacao telegramCanal;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private long lastUpdateId = 0;
 
-    public TelegramBotService(ConversationalEngineService conversationalEngine) {
+    public TelegramBotService(ConversationalEngineService conversationalEngine,
+                              TelegramCanalComunicacao telegramCanal) {
         this.conversationalEngine = conversationalEngine;
+        this.telegramCanal = telegramCanal;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
@@ -77,7 +81,8 @@ public class TelegramBotService {
                 log.warn("Erro no polling do Telegram: {}", e.getMessage());
                 try {
                     Thread.sleep(5000);
-                } catch (InterruptedException ignored) {}
+                } catch (InterruptedException ignored) {
+                }
             }
         }
     }
@@ -134,28 +139,6 @@ public class TelegramBotService {
     }
 
     public boolean enviarMensagem(String chatId, String texto) {
-        if (botToken == null || botToken.isBlank()) {
-            log.warn("Tentativa de envio Telegram sem token configurado para chatId: {}", chatId);
-            return false;
-        }
-
-        try {
-            String url = String.format("https://api.telegram.org/bot%s/sendMessage", botToken);
-            String payload = objectMapper.writeValueAsString(new SendMessagePayload(chatId, texto, "Markdown"));
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(payload))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            return response.statusCode() == 200;
-        } catch (Exception e) {
-            log.error("Erro ao enviar mensagem para Telegram chatId {}: {}", chatId, e.getMessage());
-            return false;
-        }
+        return telegramCanal.enviarMensagem(chatId, texto);
     }
-
-    private record SendMessagePayload(String chat_id, String text, String parse_mode) {}
 }

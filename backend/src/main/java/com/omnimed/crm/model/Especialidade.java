@@ -1,14 +1,15 @@
 package com.omnimed.crm.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 
+/**
+ * Representa uma especialidade médica oferecida pela clínica.
+ */
 @Entity
 @Table(name = "especialidades")
-public class Especialidade {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Especialidade extends EntidadeBase {
 
     @Column(nullable = false, unique = true, length = 100)
     private String nome;
@@ -16,19 +17,12 @@ public class Especialidade {
     @Column(length = 255)
     private String descricao;
 
-    public Especialidade() {}
+    public Especialidade() {
+    }
 
     public Especialidade(String nome, String descricao) {
-        this.nome = nome;
-        this.descricao = descricao;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
+        setNome(nome);
+        setDescricao(descricao);
     }
 
     public String getNome() {
@@ -36,7 +30,10 @@ public class Especialidade {
     }
 
     public void setNome(String nome) {
-        this.nome = nome;
+        if (nome == null || nome.isBlank()) {
+            throw new IllegalArgumentException("O nome da especialidade é obrigatório.");
+        }
+        this.nome = nome.trim();
     }
 
     public String getDescricao() {
@@ -44,6 +41,6 @@ public class Especialidade {
     }
 
     public void setDescricao(String descricao) {
-        this.descricao = descricao;
+        this.descricao = (descricao != null) ? descricao.trim() : null;
     }
 }

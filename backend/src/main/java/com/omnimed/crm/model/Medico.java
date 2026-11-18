@@ -1,17 +1,20 @@
 package com.omnimed.crm.model;
 
-import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
+/**
+ * Representa um profissional médico do corpo clínico da OmniMed.
+ * Herda atributos comuns e contratos polimórficos de {@link Pessoa}.
+ */
 @Entity
 @Table(name = "medicos")
-public class Medico {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false, length = 150)
-    private String nome;
+public class Medico extends Pessoa {
 
     @Column(nullable = false, unique = true, length = 30)
     private String crm;
@@ -20,40 +23,17 @@ public class Medico {
     @JoinColumn(name = "especialidade_id")
     private Especialidade especialidade;
 
-    @Column(length = 100)
-    private String email;
-
-    @Column(length = 25)
-    private String telefone;
-
     @Column(nullable = false)
     private Boolean ativo = true;
 
-    public Medico() {}
+    public Medico() {
+    }
 
     public Medico(String nome, String crm, Especialidade especialidade, String email, String telefone) {
-        this.nome = nome;
-        this.crm = crm;
-        this.especialidade = especialidade;
-        this.email = email;
-        this.telefone = telefone;
+        super(nome, email, telefone);
+        setCrm(crm);
+        setEspecialidade(especialidade);
         this.ativo = true;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getNome() {
-        return nome;
-    }
-
-    public void setNome(String nome) {
-        this.nome = nome;
     }
 
     public String getCrm() {
@@ -61,7 +41,10 @@ public class Medico {
     }
 
     public void setCrm(String crm) {
-        this.crm = crm;
+        if (crm == null || crm.isBlank()) {
+            throw new IllegalArgumentException("O CRM do médico é obrigatório.");
+        }
+        this.crm = crm.trim();
     }
 
     public Especialidade getEspecialidade() {
@@ -69,23 +52,10 @@ public class Medico {
     }
 
     public void setEspecialidade(Especialidade especialidade) {
+        if (especialidade == null) {
+            throw new IllegalArgumentException("A especialidade do médico é obrigatória.");
+        }
         this.especialidade = especialidade;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getTelefone() {
-        return telefone;
-    }
-
-    public void setTelefone(String telefone) {
-        this.telefone = telefone;
     }
 
     public Boolean getAtivo() {
@@ -93,6 +63,38 @@ public class Medico {
     }
 
     public void setAtivo(Boolean ativo) {
-        this.ativo = ativo;
+        this.ativo = ativo != null ? ativo : Boolean.TRUE;
+    }
+
+    public void ativar() {
+        this.ativo = true;
+    }
+
+    public void inativar() {
+        this.ativo = false;
+    }
+
+    @JsonIgnore
+    public boolean isAtivo() {
+        return Boolean.TRUE.equals(this.ativo);
+    }
+
+    @Override
+    @JsonIgnore
+    public String getIdentificacaoPrincipal() {
+        return crm;
+    }
+
+    @Override
+    @JsonIgnore
+    public String getTipoPessoa() {
+        return "Médico";
+    }
+
+    @Override
+    @JsonIgnore
+    public String getResumoPerfil() {
+        String nomeEsp = especialidade != null ? especialidade.getNome() : "Sem especialidade";
+        return String.format("%s (%s) - %s [%s]", getNome(), crm, nomeEsp, isAtivo() ? "Ativo" : "Inativo");
     }
 }
